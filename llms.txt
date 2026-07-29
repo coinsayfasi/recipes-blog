@@ -1,0 +1,17 @@
+# Tabserve
+
+> Tabserve builds simple, focused mobile apps and the practical guides around them: OneBag (travel packing), Routevia (Türkiye trip planning), and RentFlow (rental management for landlords).
+
+## Apps
+- [OneBag](https://coinsayfasi.github.io/onebag/): Smart carry-on packing lists by destination with a live bag-weight tracker for 80+ airlines.
+- [Routevia](https://coinsayfasi.github.io/routevia-app/): Discover places to visit across Türkiye and plan AI-powered, day-by-day trip routes.
+- [RentFlow](https://coinsayfasi.github.io/rentflow/): Rental property manager for landlords with free rental yield and cash-flow calculators.
+
+## Guides
+- [Blog](https://rentflow.tabserve.com.tr/blog/): Practical guides on packing smart, exploring Türkiye, and managing rental property.
+- [Türkiye Travel Guides](https://gezi.tabserve.com.tr/): City-by-city travel guides for Turkey.
+
+## About
+- [About Tabserve](https://rentflow.tabserve.com.tr/about.html)
+- [Privacy Policy](https://rentflow.tabserve.com.tr/privacy.html)
+- Contact: teknopattv@gmail.com

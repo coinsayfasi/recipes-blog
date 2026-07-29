@@ -1,0 +1,65 @@
+name: RentFlow blog auto-writer
+on:
+  schedule:
+    - cron: "0 19 * * *"       # 14:00 EST / 15:00 EDT — ABD öğleden sonra (landlord kitlesi)
+  workflow_dispatch:
+    inputs:
+      count:
+        description: "Kaç yazı üretilsin"
+        default: "1"
+permissions:
+  contents: write
+concurrency:
+  group: rentflow-blog
+  cancel-in-progress: false
+jobs:
+  write:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: pip install -r _gen/requirements.txt
+      - name: Generate post(s)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BLOG_COUNT: ${{ github.event.inputs.count || '1' }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        run: python -u _gen/generate.py
+      - name: Commit & push
+        run: |
+          [ -n "$(git status --porcelain)" ] || { echo "değişiklik yok"; exit 0; }
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "content: yeni RentFlow blog yazısı (AI, tam-SEO) [skip ci]"
+          for i in 1 2 3 4 5; do git pull --rebase && git push && exit 0; sleep 5; done
+          exit 1
+      - name: Wait for GitHub Pages deploy
+        run: sleep 90
+      - name: Ping Google Indexing + IndexNow (Bing/Yandex)
+        continue-on-error: true
+        env:
+          GOOGLE_INDEXING_SA: ${{ secrets.GOOGLE_INDEXING_SA }}
+        run: python -u _gen/index_ping.py
+      - name: Post new posts to Bluesky
+        continue-on-error: true
+        env:
+          BLUESKY_IDENTIFIER: ${{ secrets.BLUESKY_IDENTIFIER }}
+          BLUESKY_PASSWORD: ${{ secrets.BLUESKY_PASSWORD }}
+        run: python -u _gen/social_post.py
+      - name: Post to Telegram
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -u _gen/telegram_post.py
+      - name: Post to Mastodon
+        continue-on-error: true
+        env:
+          MASTODON_INSTANCE: ${{ secrets.MASTODON_INSTANCE }}
+          MASTODON_TOKEN: ${{ secrets.MASTODON_TOKEN }}
+        run: python -u _gen/mastodon_post.py

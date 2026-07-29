@@ -93,6 +93,7 @@ A small "save to Pinterest" promo box is added automatically afterwards — just
 
 STRICT RULES — follow every one:
 0. START the body with: <div class="tldr"><b>⚡ Quick summary</b><p>2-3 sentences: what this recipe is, why it works, and how long it takes total.</p></div>
+0b. LENGTH: the body must total 2200-2800 words of real text (count WORDS, not characters) — this includes the intro, recipe card, and every section after it. Do NOT pad with fluff; add real value instead: more substitutions, more troubleshooting detail, more FAQ entries, a deeper "why this works" section. Use at least 5-7 <h2> sections AFTER the recipe card (not counting "Recipe Card" and "Key Takeaways" themselves) plus at least 4 <h3> subheadings total across the article (ingredient notes, variations, etc. can be <h3> under a <h2>).
 1. The target keyword "{kw}" must appear in the TITLE and be the clear topic. The title doubles as the page H1 — do NOT output an <h1>. Title should read like a real recipe title (e.g. "Garlic Butter Baked Chicken Thighs (Crispy Skin)").
 2. Right after the intro, add a "Key Takeaways" box with EXACTLY this structure:
 <div class="quickfacts"><h2>Key Takeaways</h2><ul>
@@ -194,9 +195,8 @@ def validate(d, kw):
     h2,h3,h4 = len(re.findall(r"<h2",b)),len(re.findall(r"<h3",b)),len(re.findall(r"<h4",b))
     errs=[]
     if wc < 2000: errs.append(f"kelime {wc}<2000")
-    if h2 < 3: errs.append(f"H2 {h2}<3")
-    if h3 < 2: errs.append(f"H3 {h3}<2")
-    if h4 < 1: errs.append(f"H4 {h4}<1")
+    if h2 < 4: errs.append(f"H2 {h2}<4")
+    if h3 < 4: errs.append(f"H3 {h3}<4")
     if kw.split()[0].lower() not in d.get("title","").lower(): errs.append("anahtar kelime title'da yok")
     return errs, wc, (h2,h3,h4)
 

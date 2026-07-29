@@ -312,16 +312,19 @@ def gemini_verify_image(img_bytes, expected, mime="image/jpeg"):
                   'Reject if it is unrelated, a screenshot, a logo, a chart, text-heavy, low quality, or contains '
                   'people\'s faces prominently. Reply with ONLY one word: YES or NO.')
         body = {"contents":[{"parts":[{"text":prompt},{"inline_data":{"mime_type":mime,"data":b64}}]}],
-                "generationConfig":{"maxOutputTokens":5,"temperature":0}}
+                "generationConfig":{"maxOutputTokens":200,"temperature":0}}
         m = _gemini_ok or (GEMINI_CANDIDATES[0] if GEMINI_CANDIDATES else "gemini-flash-latest")
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key}"
         r = _post(url, body, {"content-type":"application/json"})
-        txt = r["candidates"][0]["content"]["parts"][0]["text"].strip().upper()
+        parts = r["candidates"][0]["content"].get("parts", [])
+        txt = "".join(p.get("text", "") for p in parts).strip().upper()
+        if not txt:
+            raise KeyError("no text in any part (model likely exhausted token budget thinking)")
         ok = txt.startswith("YES")
         print(f"    (görsel doğrulama: {txt[:20]} · {expected[:40]})")
         return ok
     except Exception as e:
-        print(f"    (görsel doğrulama atlandı: {type(e).__name__})")
+        print(f"    (görsel doğrulama atlandı: {type(e).__name__}: {e})")
         return True
 
 def fetch_hero(query, slug):

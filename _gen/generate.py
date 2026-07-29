@@ -94,7 +94,7 @@ A small "save to Pinterest" promo box is added automatically afterwards — just
 STRICT RULES — follow every one:
 0. START the body with: <div class="tldr"><b>⚡ Quick summary</b><p>2-3 sentences: what this recipe is, why it works, and how long it takes total.</p></div>
 0b. LENGTH: the body must total 2200-2800 words of real text (count WORDS, not characters) — this includes the intro, recipe card, and every section after it. Do NOT pad with fluff; add real value instead: more substitutions, more troubleshooting detail, more FAQ entries, a deeper "why this works" section. Use at least 5-7 <h2> sections AFTER the recipe card (not counting "Recipe Card" and "Key Takeaways" themselves) plus at least 4 <h3> subheadings total across the article (ingredient notes, variations, etc. can be <h3> under a <h2>).
-1. The target keyword "{kw}" must appear in the TITLE and be the clear topic. The title doubles as the page H1 — do NOT output an <h1>. Title should read like a real recipe title (e.g. "Garlic Butter Baked Chicken Thighs (Crispy Skin)").
+1. The target keyword "{kw}" must appear in the TITLE and be the clear topic. The title doubles as the page H1 — do NOT output an <h1>. Title should read like a real recipe title (e.g. "Garlic Butter Baked Chicken Thighs (Crispy Skin)"). CRITICAL: the "title" field MUST be complete and between 40 and 58 characters total — never write a longer title expecting it to be cut off.
 2. Right after the intro, add a "Key Takeaways" box with EXACTLY this structure:
 <div class="quickfacts"><h2>Key Takeaways</h2><ul>
 <li>...</li><li>...</li><li>...</li>
@@ -122,6 +122,8 @@ STRICT RULES — follow every one:
 8b. BANNED phrases: "unforgettable", "life-changing", "you won't believe", "hidden gem", "look no further", "in today's world". Replace hype with concrete utility: exact temps, times, textures, substitution ratios.
 9. Allowed body tags ONLY: h2, h3, h4, h5, p, ul, li, ol, strong, a, table, thead, tbody, tr, th, td, div (only for the two required div wrappers: tldr, quickfacts, recipe-card), and the class/data attributes specified above. No markdown, no <h1>, no <html>/<head>/<style>.
 10. Include 1 outbound link to a GENUINELY AUTHORITATIVE source if genuinely relevant (e.g. USDA food safety temperature guide, or a relevant Wikipedia article on an ingredient/technique). Only use well-known, stable URLs you are confident exist — prefer https://en.wikipedia.org/wiki/<Topic> or https://www.fsis.usda.gov/. NEVER invent specific deep URLs. Place it naturally inside a sentence.
+11. WRITE FOR A HUMAN READER FIRST, not for search engines. Vary sentence rhythm and structure between recipes — do not reuse the same phrasing patterns or section framing across different recipes. This site publishes many recipes; each one must read as independently written, not a variation of a template.
+12. Where genuinely relevant, include first-hand-sounding practical detail (a specific texture/timing cue, a common mistake and why it happens, a nuance that only comes from actually cooking the dish) rather than generic textbook statements. Do not fabricate specific personal anecdotes — ground advice in concrete, verifiable specifics (exact temperatures/times, cause-and-effect reasoning) so it reads as real cooking expertise, not filler.
 
 Output ONLY valid minified JSON (no code fences, no commentary), exactly these keys:
 {{"title":"...","meta_description":"max 155 chars, includes the keyword, written like an appetizing recipe meta description","keywords":"4-6 comma-separated keywords","slug":"kebab-case-from-title","img_queries":["5 separate stock photo searches, 2-4 English words each, each matching a DIFFERENT section/step of the recipe (spread across the whole piece): 1) finished dish plated 2) key ingredient close-up 3) cooking action/process 4) another angle of finished dish 5) another concrete cooking scene (e.g. [\"baked chicken thighs plated\",\"raw chicken thighs seasoning\",\"searing chicken skillet\"])"],"body":"the article HTML"}}"""
@@ -597,7 +599,7 @@ def write_post(d, app, posts=()):
     read = max(4, round(words(body)/180))
     extras, rail = post_extras(url, d["title"])
     body = body + related_block(posts, slug, tag=APPS[app]["tag"]) + extras
-    _ttl=d["title"]; _sfx=" | Tabserve"; _ttag=(_ttl+_sfx) if len(_ttl+_sfx)<=60 else (_ttl if len(_ttl)<=60 else _ttl[:60].rsplit(" ",1)[0]); page = (PAGE.replace("__TITLETAG__", html.escape(_ttag)).replace("__TITLE__", html.escape(d["title"])).replace("__DESC__", html.escape(d["meta_description"]))
+    _ttl=d["title"]; _sfx=" | Tabserve"; _ttag=(_ttl+_sfx) if len(_ttl+_sfx)<=60 else (_ttl if len(_ttl)<=60 else (_ttl[:60].rsplit(" ",1)[0].rstrip(",:;-") or _ttl[:57]+"...")); page = (PAGE.replace("__TITLETAG__", html.escape(_ttag)).replace("__TITLE__", html.escape(d["title"])).replace("__DESC__", html.escape(d["meta_description"]))
         .replace("__KW__", html.escape(d["keywords"])).replace("__URL__", url).replace("__OGIMG__", html.escape(ogimg))
         .replace("__APPMETA__", "").replace("__SCHEMA__", schema).replace("__CRUMB__", html.escape(d["title"] if len(d["title"]) <= 42 else d["title"][:42].rsplit(" ", 1)[0] + "…"))
         .replace("__TAG__", APPS[app]["tag"]).replace("__READ__", str(read)).replace("__RAIL__", rail)

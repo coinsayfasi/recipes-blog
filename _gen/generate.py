@@ -300,25 +300,68 @@ def insert_cta(body, cta):
         i = pos[len(pos)//2]; return body[:i] + cta + body[i:]
     return body + cta
 
+def gemini_verify_image(img_bytes, expected, mime="image/jpeg"):
+    """Gemini Vision ile indirilen fotoğrafın konuya uygunluğunu doğrular.
+    GEMINI_API_KEY yoksa veya hata olursa sessizce True döner (eski davranış — engellemez)."""
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not key: return True
+    try:
+        import base64
+        b64 = base64.b64encode(img_bytes).decode()
+        prompt = (f'Does this photo clearly and appropriately show "{expected}" for a recipe/food blog article? '
+                  'Reject if it is unrelated, a screenshot, a logo, a chart, text-heavy, low quality, or contains '
+                  'people\'s faces prominently. Reply with ONLY one word: YES or NO.')
+        body = {"contents":[{"parts":[{"text":prompt},{"inline_data":{"mime_type":mime,"data":b64}}]}],
+                "generationConfig":{"maxOutputTokens":5,"temperature":0}}
+        m = _gemini_ok or (GEMINI_CANDIDATES[0] if GEMINI_CANDIDATES else "gemini-flash-latest")
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key}"
+        r = _post(url, body, {"content-type":"application/json"})
+        txt = r["candidates"][0]["content"]["parts"][0]["text"].strip().upper()
+        ok = txt.startswith("YES")
+        print(f"    (görsel doğrulama: {txt[:20]} · {expected[:40]})")
+        return ok
+    except Exception as e:
+        print(f"    (görsel doğrulama atlandı: {type(e).__name__})")
+        return True
+
 def fetch_hero(query, slug):
-    """Pexels'ten konuya birebir uygun YATAY görsel indir →
-    assets/blog/<slug>.webp (1600w) + <slug>-800.webp (mobil, srcset).
-    Key yoksa veya sonuç zayıfsa sessizce görselsiz devam eder."""
-    key = os.environ.get("PEXELS_API_KEY", "").strip()
-    if not key: return False
+    """Pexels'ten (yoksa Openverse/Wikimedia'dan) konuya uygun YATAY görsel indir
+    (Gemini Vision ile doğrulanmış) → assets/blog/<slug>.webp (1600w) + <slug>-800.webp.
+    Hiçbir kaynakta uygun görsel yoksa sessizce görselsiz devam eder."""
     out = ROOT / "assets" / "blog"
     if any((out / f"{slug}.{e}").exists() for e in ("webp","jpg","jpeg","png")):
         return True
+    key = os.environ.get("PEXELS_API_KEY", "").strip()
+    raw, photographer, source = None, "?", "Pexels"
+    if key:
+        try:
+            u = "https://api.pexels.com/v1/search?" + urllib.parse.urlencode(
+                {"query": query, "orientation": "landscape", "size": "large", "per_page": 5})
+            r = json.loads(urllib.request.urlopen(
+                urllib.request.Request(u, headers={"Authorization": key, "User-Agent": "tabserve-blog/1.0"}), timeout=25).read())
+            for cand in (r.get("photos") or []):
+                src = cand["src"].get("large2x") or cand["src"].get("large")
+                try:
+                    cand_raw = urllib.request.urlopen(urllib.request.Request(
+                        src, headers={"User-Agent": "tabserve-blog/1.0"}), timeout=40).read()
+                except Exception:
+                    continue
+                if gemini_verify_image(cand_raw, query):
+                    raw, photographer = cand_raw, cand.get("photographer", "?"); break
+        except Exception as e:
+            print(f"  (Pexels hatası: {type(e).__name__})")
+    if raw is None:  # Pexels'te bulunamadı/key yok → ücretsiz Openverse (Wikimedia dahil)
+        source = "Openverse"
+        for cand in _openverse(query, 5):
+            try:
+                cand_raw = urllib.request.urlopen(urllib.request.Request(
+                    cand["url"], headers={"User-Agent": "tabserve-blog/1.0"}), timeout=40).read()
+            except Exception:
+                continue
+            if gemini_verify_image(cand_raw, query):
+                raw, photographer = cand_raw, cand.get("creator", "Unknown"); break
+    if raw is None: return False
     try:
-        u = "https://api.pexels.com/v1/search?" + urllib.parse.urlencode(
-            {"query": query, "orientation": "landscape", "size": "large", "per_page": 5})
-        r = json.loads(urllib.request.urlopen(
-            urllib.request.Request(u, headers={"Authorization": key, "User-Agent": "tabserve-blog/1.0"}), timeout=25).read())
-        photos = r.get("photos") or []
-        if not photos: return False
-        src = photos[0]["src"].get("large2x") or photos[0]["src"].get("large")
-        raw = urllib.request.urlopen(urllib.request.Request(
-            src, headers={"User-Agent": "tabserve-blog/1.0"}), timeout=40).read()
         out.mkdir(parents=True, exist_ok=True)
         try:
             import io
@@ -330,29 +373,48 @@ def fetch_hero(query, slug):
                 img.save(out / f"{slug}{suf}.webp", "WEBP", quality=82)
         except ImportError:
             (out / f"{slug}.jpg").write_bytes(raw)
-        print(f"  🖼  Pexels: {slug} <- {query} (photo: {photos[0].get('photographer','?')})")
+        print(f"  🖼  {source}: {slug} <- {query} (by: {photographer})")
         return True
     except Exception as e:
         print(f"  (görsel atlandı: {type(e).__name__})")
         return False
 
 def fetch_inpost(query, slug, idx):
-    """In-content image: single 1000w, lazy — assets/blog/<slug>-in<idx>.webp"""
-    key = os.environ.get("PEXELS_API_KEY", "").strip()
-    if not key: return None
+    """In-content image: single 1000w, lazy — assets/blog/<slug>-in<idx>.webp
+    (Pexels'te bulunamazsa Openverse/Wikimedia'ya düşer, Gemini Vision ile doğrulanmış)"""
     out = ROOT / "assets" / "blog"
     f = out / f"{slug}-in{idx}.webp"
     if f.exists(): return f"/assets/blog/{f.name}"
+    key = os.environ.get("PEXELS_API_KEY", "").strip()
+    raw = None
+    if key:
+        try:
+            u = "https://api.pexels.com/v1/search?" + urllib.parse.urlencode(
+                {"query": query, "orientation": "landscape", "size": "large", "per_page": 3})
+            r = json.loads(urllib.request.urlopen(urllib.request.Request(
+                u, headers={"Authorization": key, "User-Agent": "tabserve-blog/1.0"}), timeout=25).read())
+            for cand in (r.get("photos") or []):
+                src = cand["src"].get("large") or cand["src"].get("large2x")
+                try:
+                    cand_raw = urllib.request.urlopen(urllib.request.Request(
+                        src, headers={"User-Agent": "tabserve-blog/1.0"}), timeout=40).read()
+                except Exception:
+                    continue
+                if gemini_verify_image(cand_raw, query):
+                    raw = cand_raw; break
+        except Exception as e:
+            print(f"  (Pexels hatası: {type(e).__name__})")
+    if raw is None:
+        for cand in _openverse(query, 3):
+            try:
+                cand_raw = urllib.request.urlopen(urllib.request.Request(
+                    cand["url"], headers={"User-Agent": "tabserve-blog/1.0"}), timeout=40).read()
+            except Exception:
+                continue
+            if gemini_verify_image(cand_raw, query):
+                raw = cand_raw; break
+    if raw is None: return None
     try:
-        u = "https://api.pexels.com/v1/search?" + urllib.parse.urlencode(
-            {"query": query, "orientation": "landscape", "size": "large", "per_page": 3})
-        r = json.loads(urllib.request.urlopen(urllib.request.Request(
-            u, headers={"Authorization": key, "User-Agent": "tabserve-blog/1.0"}), timeout=25).read())
-        photos = r.get("photos") or []
-        if not photos: return None
-        src = photos[0]["src"].get("large") or photos[0]["src"].get("large2x")
-        raw = urllib.request.urlopen(urllib.request.Request(
-            src, headers={"User-Agent": "tabserve-blog/1.0"}), timeout=40).read()
         import io
         from PIL import Image
         im = Image.open(io.BytesIO(raw)).convert("RGB")
@@ -360,7 +422,7 @@ def fetch_inpost(query, slug, idx):
             im = im.resize((1000, round(im.height * 1000 / im.width)), Image.LANCZOS)
         out.mkdir(parents=True, exist_ok=True)
         im.save(f, "WEBP", quality=80)
-        print(f"  🖼  Pexels in-content {idx}: {slug} <- {query}")
+        print(f"  🖼  in-content {idx}: {slug} <- {query}")
         return f"/assets/blog/{f.name}"
     except Exception as e:
         print(f"  (in-content skipped: {type(e).__name__})"); return None

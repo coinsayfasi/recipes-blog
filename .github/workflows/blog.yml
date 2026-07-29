@@ -1,7 +1,8 @@
-name: RentFlow blog auto-writer
+name: Simple Skillet recipe auto-writer
 on:
   schedule:
-    - cron: "0 19 * * *"       # 14:00 EST / 15:00 EDT — ABD öğleden sonra (landlord kitlesi)
+    - cron: "0 16 * * *"       # 12:00 EST / 09:00 PST — ABD öğün planlama saatleri
+    - cron: "0 20 * * *"       # günde 2. yazı
   workflow_dispatch:
     inputs:
       count:
@@ -10,7 +11,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: rentflow-blog
+  group: simpleskillet-blog
   cancel-in-progress: false
 jobs:
   write:
@@ -35,7 +36,7 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "content: yeni RentFlow blog yazısı (AI, tam-SEO) [skip ci]"
+          git commit -m "content: yeni Simple Skillet tarif yazısı (AI, tam-SEO) [skip ci]"
           for i in 1 2 3 4 5; do git pull --rebase && git push && exit 0; sleep 5; done
           exit 1
       - name: Wait for GitHub Pages deploy
@@ -63,3 +64,17 @@ jobs:
           MASTODON_INSTANCE: ${{ secrets.MASTODON_INSTANCE }}
           MASTODON_TOKEN: ${{ secrets.MASTODON_TOKEN }}
         run: python -u _gen/mastodon_post.py
+      - name: Post to Pinterest
+        continue-on-error: true
+        env:
+          PINTEREST_APP_ID: ${{ secrets.PINTEREST_APP_ID }}
+          PINTEREST_APP_SECRET: ${{ secrets.PINTEREST_APP_SECRET }}
+          PINTEREST_REFRESH_TOKEN: ${{ secrets.PINTEREST_REFRESH_TOKEN }}
+        run: python -u _gen/pinterest_post.py
+      - name: Commit Pinterest state
+        continue-on-error: true
+        run: |
+          [ -n "$(git status --porcelain _gen/pinterest_state.json)" ] || exit 0
+          git add _gen/pinterest_state.json
+          git commit -m "chore: pinterest state [skip ci]"
+          for i in 1 2 3 4 5; do git pull --rebase && git push && exit 0; sleep 5; done
